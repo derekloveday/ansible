@@ -1,0 +1,280 @@
+#!/bin/bash
+
+# color codes
+RESTORE='\033[0m'
+NC='\033[0m'
+BLACK='\033[00;30m'
+RED='\033[00;31m'
+GREEN='\033[00;32m'
+YELLOW='\033[00;33m'
+BLUE='\033[00;34m'
+PURPLE='\033[00;35m'
+CYAN='\033[00;36m'
+SEA="\\033[38;5;49m"
+LIGHTGRAY='\033[00;37m'
+LBLACK='\033[01;30m'
+LRED='\033[01;31m'
+LGREEN='\033[01;32m'
+LYELLOW='\033[01;33m'
+LBLUE='\033[01;34m'
+LPURPLE='\033[01;35m'
+LCYAN='\033[01;36m'
+WHITE='\033[01;37m'
+OVERWRITE='\e[1A\e[K'
+
+#emoji codes
+CHECK_MARK="${GREEN}\xE2\x9C\x94${NC}"
+X_MARK="${RED}\xE2\x9C\x96${NC}"
+PIN="${RED}\xF0\x9F\x93\x8C${NC}"
+CLOCK="${GREEN}\xE2\x8C\x9B${NC}"
+ARROW="${SEA}\xE2\x96\xB6${NC}"
+BOOK="${RED}\xF0\x9F\x93\x8B${NC}"
+HOT="${ORANGE}\xF0\x9F\x94\xA5${NC}"
+WARNING="${RED}\xF0\x9F\x9A\xA8${NC}"
+RIGHT_ANGLE="${GREEN}\xE2\x88\x9F${NC}"
+
+VAULT_SECRET_FILE="$HOME/.ansible-vault/vault.secret"
+OP_INSTALLED=false
+OP_AUTHENTICATED=false
+OP_VAULT_SECRET=""
+ID=""
+DOTFILES_LOG="$HOME/.dotfiles.log"
+DOTFILES_DIR="$HOME/.dotfiles"
+# DOTFILES_DIR="$HOME/dev/personal/dotfiles"
+SSH_DIR="$HOME/.ssh"
+IS_FIRST_RUN="$HOME/.dotfiles_run"
+
+export XDG_CONFIG_HOME="$HOME/.config"
+
+
+# _cmd performs commands with error checking
+function _cmd() {
+  #create log if it doesn't exist
+  if ! [[ -f $DOTFILES_LOG ]]; then
+    touch $DOTFILES_LOG
+  fi
+  # empty conduro.log
+  > $DOTFILES_LOG
+  # hide stdout, on error we print and exit
+  if eval "$1" 1> /dev/null 2> $DOTFILES_LOG; then
+    return 0 # success
+  fi
+  # read error from log and add spacing
+  printf "${OVERWRITE}${LRED} [X]  ${TASK}${LRED}\n"
+  while read line; do
+    printf "      ${line}\n"
+  done < $DOTFILES_LOG
+  printf "\n"
+  # remove log file
+  rm $DOTFILES_LOG
+  # exit installation
+  exit 1
+}
+
+function __task() {
+  # if _task is called while a task was set, complete the previous
+  if [[ $TASK != "" ]]; then
+    printf "${OVERWRITE}${LGREEN} [✓]  ${LGREEN}${TASK}\n"
+  fi
+  # set new task title and print
+  TASK=$1
+  printf "${LBLACK} [ ]  ${TASK} \n${LRED}"
+}
+
+function ubuntu_setup() {
+  if ! dpkg -s ansible >/dev/null 2>&1; then
+    __task "Installing Ansible"
+    _cmd "sudo apt update"
+    _cmd "sudo apt install -y software-properties-common"
+    _cmd "sudo apt-add-repository -y ppa:ansible/ansible"
+    _cmd "sudo apt update"
+    _cmd "sudo apt install -y ansible python3-argcomplete gcc curl"
+    _cmd "sudo activate-global-python-argcomplete"
+  fi
+
+  if ! dpkg -s python3 >/dev/null 2>&1; then
+    __task "Installing Python3"
+    _cmd "sudo apt-get install -y python3"
+  fi
+
+
+  local UBUNTU_MAJOR_VERSION=$(echo $VERSION_ID | cut -d. -f1)
+  if [ $UBUNTU_MAJOR_VERSION -le 22 ]; then
+    if ! dpkg -s python3-pip >/dev/null 2>&1; then
+      __task "Installing Python3 Pip"
+      _cmd "sudo apt-get install -y python3-pip"
+    fi
+    if ! pip3 list | grep watchdog >/dev/null 2>&1; then
+      __task "Installing Python3 Watchdog"
+      _cmd "sudo apt-get install -y python3-watchdog"
+    fi
+  fi
+
+  if ! dpkg -s git >/dev/null 2>&1; then
+    __task "Installing Git"
+    _cmd "sudo apt-get install -y git"
+  fi
+}
+
+update_ansible_galaxy() {
+  local os=$1
+  local os_requirements=""
+  __task "Updating Ansible Galaxy"
+  if [ -f "$DOTFILES_DIR/requirements/$os.yml" ]; then
+    __task "${OVERWRITE}Updating Ansible Galaxy with OS Config: $os"
+    os_requirements="$DOTFILES_DIR/requirements/$os.yml"
+  fi
+  _cmd "ansible-galaxy install -r $DOTFILES_DIR/requirements.yml $os_requirements"
+}
+
+function confirm_vault_access() {
+  __task "Checking for 1Password CLI"
+  if op --version >/dev/null 2>&1; then
+    local num_processes=$(ps -aux | grep -i "1password" | grep -v grep | wc -l)
+    if [[ "$num_processes" == "0" ]]; then
+      __task "Launching 1Password Desktop"
+      _cmd "gtk-launch 1password"
+      sleep 2
+    fi
+    OP_INSTALLED=true
+    _cmd "op --account my.1password.com vault list"
+    OP_AUTHENTICATED=true
+  fi
+}
+
+function install_1password_cli() {
+
+  if ! dpkg -s 1password-cli >/dev/null 2>&1; then
+    __task "Installing 1Password CLI"
+
+    # Add the key for the 1Password apt repository
+    _cmd "curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+    sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg "
+
+    # Add the 1Passowrd apt repository
+    _cmd "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main\" |
+    sudo tee /etc/apt/sources.list.d/1password.list"
+
+    # Add the debsig-verify policy
+    _cmd "sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/"
+    _cmd "curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | \
+    sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol && \
+    sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22 && \
+    curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+    sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg"
+
+    _cmd "sudo apt update && sudo apt install -y 1password-cli"
+  fi
+
+  if ! dpkg -s 1password >/dev/null 2>&1; then
+    __task "Installing 1Password Desktop App"
+
+    _cmd "sudo apt update && sudo apt install -y 1password"
+  fi
+
+  confirm_vault_access
+}
+
+function install_1password() {
+  install_1password_cli
+}
+
+function install_ssh_keys() {
+  private_file_name=$(op read "op://Dev Environment/Ubuntu-24.04-Dev-VM SSH Key/text")
+  public_file_name="$private_file_name.pub"
+
+  if ! [[ -f "$SSH_DIR/authorized_keys" ]]; then
+    __task "Generating SSH keys"
+    _cmd "mkdir -p $SSH_DIR"
+    _cmd "chmod 700 $SSH_DIR"
+    _cmd "touch $SSH_DIR/authorized_keys"
+    _cmd "chmod 600 $SSH_DIR/authorized_keys"
+  fi
+
+  if [[ ! -f "$SSH_DIR/$private_file_name" ]]; then
+    __task "Installing SSH private key"
+    _cmd "op read 'op://Dev Environment/Ubuntu-24.04-Dev-VM SSH Key/private key' > $SSH_DIR/$private_file_name"
+    _cmd "chmod 600 $SSH_DIR/$private_file_name"
+  fi
+  
+  
+  if [[ ! -f "$SSH_DIR/$public_file_name" ]]; then
+    __task "Installing SSH public key"
+    _cmd "op read 'op://Dev Environment/Ubuntu-24.04-Dev-VM SSH Key/public key' > $SSH_DIR/$public_file_name"
+    _cmd "chmod 600 $SSH_DIR/$public_file_name"
+  fi
+
+  if ! grep $USER@$HOSTNAME $SSH_DIR/authorized_keys >/dev/null 2>&1; then
+    __task "Adding SSH public key to authorized_keys file"
+    public_key_content=$(cat $SSH_DIR/$public_file_name)
+    _cmd "echo '$public_key_content $USER@$HOSTNAME' >> $SSH_DIR/authorized_keys"
+  fi
+
+  /usr/bin/ssh-add 2>/dev/null
+}
+
+function install_git_repo() {
+  if ! [[ -d "$DOTFILES_DIR" ]]; then
+    __task "Cloning dotfiles repository"
+    _cmd "git clone git@github.com:derekloveday/ansible.git $DOTFILES_DIR"
+  fi
+
+  git_status=$(git -C $DOTFILES_DIR status --porcelain=v1 2>/dev/null)
+  results=$([ -z "$git_status" ] && echo "No uncommitted changes.")
+
+  if [[ "$results" == "No uncommitted changes." ]]; then
+    __task "Updating dotfiles repository"
+    _cmd "git -C $DOTFILES_DIR pull --quiet"
+  fi
+}
+
+
+if [ -f /etc/os-release ]; then
+  source /etc/os-release
+else
+  if [ -x "$(command -v uname)" ]; then
+    ID=$(uname -s)
+  fi
+fi
+
+__task "Loading Setup for detected OS: $ID"
+case $ID in
+  ubuntu)
+    ubuntu_setup
+    ;;
+  arch)
+    arch_setup
+    ;;
+  Darwin)
+    macos_setup
+    ;;
+  *)
+    __task "Unsupported OS"
+    _cmd "echo 'Unsupported OS'"
+    ;;
+esac
+
+
+if [[ "$OP_INSTALLED" == "false" ]]; then
+  install_1password
+fi
+
+install_ssh_keys
+
+install_git_repo
+
+pushd "$DOTFILES_DIR" 2>&1 > /dev/null
+
+
+update_ansible_galaxy $ID
+
+confirm_vault_access
+
+if [[ -n $OP_AUTHENTICATED ]]; then
+  printf "${OVERWRITE}${LGREEN} [✓]  ${LGREEN}Checking for 1Password CLI: 1Password Authentication successful! ☕${NC}\n"
+  rm -f $VAULT_SECRET_FILE
+  # ansible-playbook "$DOTFILES_DIR/main.yml" "--ask-become-pass" "$@"
+  ansible-playbook "$DOTFILES_DIR/site.yml" "--ask-become-pass" "$@"
+else
+  printf "${OVERWRITE}${LRED} [X]  ${LRED}Checking for 1Password CLI: Unable to Authenticate with 1Password.${NC}\n"
+fi

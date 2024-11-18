@@ -1,0 +1,5 @@
+---
+- name: Linuxbrew | Cleanup default .zprofile
+  ansible.builtin.file:
+    path: /{{ ansible_user_dir }}/.zprofile
+    state: absent

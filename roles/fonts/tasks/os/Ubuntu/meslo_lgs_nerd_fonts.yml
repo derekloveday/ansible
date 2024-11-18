@@ -1,0 +1,10 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Download Meslo LGS Nerd Fonts"
+  ansible.builtin.get_url:
+    url: "https://github.com/romkatv/powerlevel10k-media/raw/master/{{ font_item | urlencode }}"
+    dest: "{{ user_fonts_path }}/{{ font_item }}"
+    force: true
+    mode: "0755"
+  loop: "{{ fonts.meslo_lgs_nerd_fonts }}"
+  loop_control:
+    loop_var: font_item

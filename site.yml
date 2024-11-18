@@ -1,0 +1,3 @@
+---
+# file: site.yml
+- ansible.builtin.import_playbook: development.yml

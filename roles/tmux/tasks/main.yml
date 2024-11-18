@@ -1,0 +1,43 @@
+---
+- name: "{{ role_name }} | Including generic distribution tasks for: {{ ansible_distribution }}"
+  ansible.builtin.include_tasks:  "{{ playbook_dir }}/tasks/all.yml"
+
+- name: "{{ role_name }} | Set up tmux configuration directory"
+  block:
+    - name: "{{ role_name }} | Set tmux configuration path"
+      ansible.builtin.set_fact:
+        tmux_config_path: "{{ env.xdg_config_dir }}/tmux"
+      when: tmux_config_path is undefined
+
+    - name: "{{ role_name }} | Check whether tmux config path exists"
+      ansible.builtin.stat:
+        path: "{{ tmux_config_path }}"
+      register: tmux_config_path_st
+
+    - name: "{{ role_name }} | Creates tmux config path"
+      ansible.builtin.file:
+        path: "{{ tmux_config_path }}"
+        state: directory
+        owner: "{{ ansible_user_uid }}"
+        group: "{{ ansible_user_gid }}"
+        mode: 0775
+        recurse: yes
+      when: 
+        - not tmux_config_path_st.stat.exists
+
+- name: "{{ role_name }} | Install TPM"
+  ansible.builtin.git:
+    repo: https://github.com/tmux-plugins/tpm
+    dest: "{{ tmux_config_path }}/plugins/tpm"
+
+- name: "{{ role_name }} | Configure tmux"
+  ansible.builtin.template:
+    src: tmux.conf.j2
+    dest: "{{ tmux_config_path }}/tmux.conf"
+
+- name: "{{ role_name }} | Copy falcon.tmux.conf"
+  ansible.builtin.copy:
+    src: "falcon.tmux.conf"
+    dest: "{{ tmux_config_path }}/falcon.tmux.conf"
+    mode: "0644"
+  changed_when: true # will be notified on change

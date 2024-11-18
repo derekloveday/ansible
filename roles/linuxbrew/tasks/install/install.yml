@@ -1,0 +1,16 @@
+---
+- name: "{{ role_name }} | install | Install dependencies on Debian based systems"
+  ansible.builtin.import_tasks: debian.yml
+  when: "ansible_os_family == 'Debian' or ansible_distribution == 'Pengwin'"
+
+- name: "{{ role_name }} | install | Install dependencies on RedHat based systems"
+  ansible.builtin.import_tasks: redhat.yml
+  when: "ansible_os_family == 'RedHat'"
+
+- name: "{{ role_name }} | install | Install with Git"
+  ansible.builtin.import_tasks: with_git.yml
+  when: not linuxbrew_use_installer
+
+- name: "{{ role_name }} | install | Install using the installer script"
+  ansible.builtin.import_tasks: with_installer.yml
+  when: linuxbrew_use_installer

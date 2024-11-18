@@ -1,0 +1,53 @@
+---
+- name: "{{ role_name }} | Including generic distribution tasks for: {{ ansible_distribution }}"
+  ansible.builtin.include_tasks:  "{{ playbook_dir }}/tasks/all.yml"
+
+- name: "{{ role_name }} | Set up nvim configuration directory"
+  block:
+    - name: "{{ role_name }} | Set nvim configuration path"
+      ansible.builtin.set_fact:
+        nvim_config_path: "{{ env.xdg_config_dir }}/nvim"
+      when: nvim_config_path is undefined
+
+    - name: "{{ role_name }} | Check whether nvim config path exists"
+      ansible.builtin.stat:
+        path: "{{ nvim_config_path }}"
+      register: nvim_config_path_st
+
+    - name: "{{ role_name }} | Creates nvim config path"
+      ansible.builtin.file:
+        path: "{{ nvim_config_path }}"
+        state: directory
+        owner: "{{ ansible_user_uid }}"
+        group: "{{ ansible_user_gid }}"
+        mode: 0775
+        recurse: yes
+      when: 
+        - not nvim_config_path_st.stat.exists
+
+- name: "{{ role_name }} | Copy init.lua"
+  ansible.builtin.copy:
+    dest: "{{ env.xdg_config_dir }}/nvim/init.lua"
+    src: "init.lua"
+    mode: "0644"
+
+- name: "{{ role_name }} | Copy .luarc.json"
+  ansible.builtin.copy:
+    dest: "{{ env.xdg_config_dir }}/nvim/.luarc.json"
+    src: ".luarc.json"
+    mode: "0644"
+
+- name: "{{ role_name }} | Copy .stylua.toml"
+  ansible.builtin.copy:
+    dest: "{{ env.xdg_config_dir }}/nvim/.stylua.toml"
+    src: ".stylua.toml"
+    mode: "0644"
+
+- name: "{{ role_name }} | Copy modules"
+  block:
+    - name: "Neovim | Copy modules - lua"
+      ansible.builtin.copy:
+        dest: "{{ env.xdg_config_dir }}/nvim/lua"
+        src: "lua/"
+        mode: "0644"
+

@@ -1,0 +1,61 @@
+[includeIf "gitdir:{{ ansible_user_dir }}/.dotfiles/"]
+  path = {{ ansible_user_dir }}/.gitconfig-personal
+
+[includeIf "gitdir:{{ ansible_user_dir }}/dev/personal/"]
+  path = {{ ansible_user_dir }}/.gitconfig-personal
+
+[includeIf "gitdir:{{ ansible_user_dir }}/dev/work/"]
+  path = {{ ansible_user_dir }}/.gitconfig-work
+
+[core]
+  editor = vi
+  excludesFile = {{ ansible_user_dir }}/.gitignore_global
+
+[commit]
+  template = {{ ansible_user_dir }}/.config/git/commit_template
+
+[alias]
+  co = checkout
+  cb = symbolic-ref --short HEAD
+  aliases = !git config --get-regexp 'alias.*' | colrm 1 6 | sed 's/[ ]/ = /'
+  new = !sh -c 'git lg $1@{1}..$1@{0} "$0"'
+  lg1 = log --graph --decorate=full --abbrev-commit --date=relative --pretty=format:'%C(auto)%h -%d%Creset %s %C(green) (%cr) %C(bold blue)<%an>%n%creset'
+  lg = !git lg1
+  pb = !git remote prune origin && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -D
+
+[color]
+  ui = auto
+[color "branch"]
+  current = yellow bold
+  local = green bold
+  remote = cyan bold
+[color "diff"]
+  meta = yellow bold
+  frag = magenta bold
+  old = red bold
+  whitespace = red reverse
+[color "status"]
+  added = green bold
+  changed = yellow bold
+  untracked = red bold
+[delta]
+  features = line-numbers decorations
+  line-numbers = true
+[delta "decorations"]
+  minus-style = red bold normal
+  plus-style = green bold normal
+  minus-emph-style = white bold red
+  minus-non-emph-style = red bold normal
+  plus-emph-style = white bold green
+  plus-non-emph-style = green bold normal
+  file-style = yellow bold none
+  file-decoration-style = magenta
+  hunk-header-style = magenta bold
+  hunk-header-decoration-style = magenta box
+  minus-empty-line-marker-style = normal normal
+  plus-empty-line-marker-style = normal normal
+  line-numbers-right-format = "{np:^4}| "
+[fetch]
+  prune = true
+[pull]
+  rebase = true

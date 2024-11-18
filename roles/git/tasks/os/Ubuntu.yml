@@ -1,0 +1,12 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install git"
+  ansible.builtin.command:
+    argv:
+      - apt
+      - install
+      - git
+  register: apt_output
+  become: true
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install git output"
+  ansible.builtin.debug: msg="{{ apt_output.stdout_lines }}"

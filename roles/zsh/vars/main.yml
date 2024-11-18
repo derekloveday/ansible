@@ -1,0 +1,12 @@
+---
+custom_plugins:
+  - repo: chrissicool/zsh-256color
+    name: zsh-256color
+  - repo: zsh-users/zsh-autosuggestions
+    name: zsh-autosuggestions
+  - repo: zsh-users/zsh-completions
+    name: zsh-completions
+  - repo: zsh-users/zsh-history-substring-search
+    name: zsh-history-substring-search
+  - repo: zsh-users/zsh-syntax-highlighting
+    name: zsh-syntax-highlighting

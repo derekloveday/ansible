@@ -1,0 +1,13 @@
+---
+- name: "{{ role_name }} | Register font config"
+  ansible.builtin.set_fact:
+    font_config_path: "{{ role_path }}/tasks/os/{{ ansible_distribution }}/{{ item }}.yml"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Checking for Font Config"
+  ansible.builtin.stat:
+    path: "{{ font_config_path }}"
+  register: font_config_st
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Run Tasks: Font Config"
+  ansible.builtin.include_tasks: "{{ font_config_path }}"
+  when: font_config_st.stat.exists

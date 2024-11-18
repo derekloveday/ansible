@@ -1,0 +1,12 @@
+Archlinux_dependencies:
+  - jq
+  - open-iscsi
+  - zsh
+
+MacOSX_dependencies:
+  - jq
+
+Ubuntu_dependencies:
+  - jq
+  - open-iscsi
+  - zsh
