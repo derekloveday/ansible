@@ -1,0 +1,24 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Set path to {{ ansible_user_dir }}/.fonts"
+  ansible.builtin.set_fact:
+    user_fonts_path: "{{ ansible_user_dir }}/.fonts"
+  when: user_fonts_path is undefined
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Check whether {{ user_fonts_path }} exists"
+  ansible.builtin.stat:
+    path: "{{ user_fonts_path }}"
+  register: user_fonts_path_st
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Create {{ user_fonts_path }} directory"
+  ansible.builtin.file:
+    path: "{{ user_fonts_path }}"
+    state: directory
+  when:
+    - not user_fonts_path_st.stat.exists
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Get Font Names"
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/os/{{ ansible_distribution }}/fonts.yml"
+  with_items: "{{ fonts }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Update font cache"
+  ansible.builtin.command: fc-cache -f -v

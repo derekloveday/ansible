@@ -1,0 +1,24 @@
+---
+default_roles:
+  - system
+  - zsh
+  - linuxbrew
+  - fonts
+  - git
+  - fzf
+  - tmux
+  - nvm
+  - npm
+  - neovim
+
+env:
+  xdg_config_dir: "{{ lookup('ansible.builtin.env', 'XDG_CONFIG_HOME') if lookup('ansible.builtin.env', 'XDG_CONFIG_HOME') else lookup('ansible.builtin.env', 'HOME') + '/.config' }}"
+
+op:
+  git:
+    personal:
+      username: "op://Dev Environment/Personal Git/username"
+      email: "op://Dev Environment/Personal Git/email"
+    work:
+      username: "op://Dev Environment/Work Git/username"
+      email: "op://Dev Environment/Work Git/email"

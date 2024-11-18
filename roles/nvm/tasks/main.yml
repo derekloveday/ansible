@@ -1,0 +1,6 @@
+---
+- name: "{{ role_name }} | Including generic distribution tasks for: {{ ansible_distribution }}"
+  ansible.builtin.include_tasks:  "{{ playbook_dir }}/tasks/all.yml"
+
+
+

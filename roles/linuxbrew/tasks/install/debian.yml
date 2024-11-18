@@ -1,0 +1,14 @@
+---
+- name: "{{ role_name }} | install | debian | Get install dependencies"
+  set_fact:
+    install_dependencies: "{{ linuxbrew_install_dependencies | join(' ') }}"
+  when: linuxbrew_install_dependencies is defined
+
+- name: "{{ role_name }} | install | debian | Install dependencies with APT"
+  ansible.builtin.command: "apt install -y {{ install_dependencies }}"
+  when: install_dependencies is defined
+  register: apt_output
+  become: true
+
+- name: "{{ role_name }} | install | debian | Install dependencies with APT output"
+  ansible.builtin.debug: msg="{{ apt_output.stdout_lines }}"

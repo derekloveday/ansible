@@ -1,0 +1,35 @@
+---
+- name: "{{ role_name }} | mode configuration | Read git {{ item }} email secret from 1Password"
+  when: op_installed
+  block:
+    - name: "{{ role_name }} | mode configuration | 1Password | Get mode vault paths"
+      ansible.builtin.set_fact:
+        op_git_vault_email_path: "{{ hostvars[inventory_hostname].op.git[item].email }}"
+        op_git_vault_username_path: "{{ hostvars[inventory_hostname].op.git[item].username }}"
+
+    - name: "{{ role_name }} | mode configuration | 1Password | Get git {{ item }} email"
+      ansible.builtin.command: "op --account my.1password.com read '{{ op_git_vault_email_path }}'"
+      register: op_git_vault_email
+      changed_when: false
+      # no_log: true
+
+    - name: "{{ role_name }} | mode configuration | 1Password | Set git mode email"
+      ansible.builtin.set_fact:
+        git_mode_email: "{{ op_git_vault_email.stdout }}"
+      no_log: true
+
+    - name: "{{ role_name }} | mode configuration | 1Password | Get git {{ item }} username"
+      ansible.builtin.command: "op --account my.1password.com read '{{ op_git_vault_username_path }}'"
+      register: op_git_vault_username
+      changed_when: false
+      # no_log: true
+
+    - name: "{{ role_name }} | mode configuration | 1Password | Set git mode username"
+      ansible.builtin.set_fact:
+        git_mode_username: "{{ op_git_vault_username.stdout }}"
+      no_log: true
+
+- name: "{{ role_name }} | mode configuration | Deploy {{ item }} configuration file"
+  ansible.builtin.template:
+    src: "gitconfig-mode.j2"
+    dest: "{{ ansible_user_dir }}/.gitconfig-{{ item }}"

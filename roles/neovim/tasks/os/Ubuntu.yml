@@ -1,0 +1,48 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install nvim"
+  community.general.homebrew:
+    name:
+      - nvim
+      - ripgrep
+    state: present
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Configure aliases.zsh (if it exists)"
+  block:
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Set path to aliases.zsh"
+      ansible.builtin.set_fact:
+        aliases_zsh_path: "{{ env.xdg_config_dir }}/zsh/aliases.zsh"
+      when: aliases_zsh_path is undefined
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether aliases.zsh exists"
+      ansible.builtin.stat:
+        path: "{{ aliases_zsh_path }}"
+      register: aliases_zsh_path_st
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Resolve aliases.zsh symlink"
+      ansible.builtin.set_fact:
+        zshrc_path: "{{ aliases_zsh_path_st.stat.lnk_source }}"
+      when:
+        - aliases_zsh_path_st.stat.exists
+        - aliases_zsh_path_st.stat.islnk
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether neovim is loaded in aliases.zsh"
+      ansible.builtin.command: >-
+        grep -Fq 'alias vi="nvim"' {{ aliases_zsh_path }}
+      register: check_aliases_zsh_neovim
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      when: aliases_zsh_path_st.stat.exists
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} |  Load neovim in aliases.zsh"
+      ansible.builtin.blockinfile:
+        dest: "{{ aliases_zsh_path }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: neovim"
+        append_newline: true
+        prepend_newline: true
+        block: |
+          alias vi="nvim"
+          alias vim="nvim"
+      when:
+        - aliases_zsh_path_st.stat.exists
+        - check_aliases_zsh_neovim.rc != 0

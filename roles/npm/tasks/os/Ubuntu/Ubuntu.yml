@@ -1,0 +1,33 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Retrieve latest nodejs LTS versions numbers"
+  ansible.builtin.shell: |
+    curl -sL https://nodejs.org/dist/index.json | jq -r '.[] | select(.lts) | .version' | cut -d'.' -f1 | uniq | head -5 | sort
+  register: nodejs_latest_lts_major_versions_output
+  changed_when: false
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Set latest nodejs LTS major versions list"
+  ansible.builtin.set_fact:
+    nodejs_latest_lts_major_versions: "{{ nodejs_latest_lts_major_versions_output.stdout_lines }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Get latest for Node major version"
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/os/{{ ansible_distribution }}/node.yml"
+  with_items: "{{ nodejs_latest_lts_major_versions }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Retrieve latest nodejs LTS version"
+  ansible.builtin.shell: |
+    curl -sL https://nodejs.org/dist/index.json | jq -r '.[] | select(.lts) | .version' | cut -d'.' -f1 | uniq | head -1
+  register: nodejs_latest_version_output
+  changed_when: false
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Use latest nodejs LTS version"
+  ansible.builtin.shell: |
+    #!/usr/bin/env bash
+    TERM=dumb
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+    nvm use {{ nodejs_latest_version_output.stdout }}
+    nvm alias default {{ nodejs_latest_version_output.stdout }}
+  args:
+    executable: /bin/bash
+  register: use_latest_lts_version_output

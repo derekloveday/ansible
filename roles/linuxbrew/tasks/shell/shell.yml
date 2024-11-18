@@ -1,0 +1,20 @@
+---
+- name: "{{ role_name }} | shell | Set path to Linuxbrew prefix"
+  ansible.builtin.set_fact:
+    linuxbrew_prefix: "{{ item }}"
+  with_first_found:
+    - "{{ linuxbrew_prefix_shared }}"
+    - "{{ linuxbrew_prefix_user }}"
+  become: true
+
+- name: "{{ role_name }} | shell | Load Linuxbrew in bash"
+  ansible.builtin.import_tasks: bash.yml
+  when: linuxbrew_prefix is defined
+
+# - name: "Debug"
+#   ansible.builtin.debug:
+#     var: hostvars[inventory_hostname]
+
+- name: "{{ role_name }} | shell | Load Linuxbrew in zsh"
+  ansible.builtin.import_tasks: zsh.yml
+  when: linuxbrew_prefix is defined

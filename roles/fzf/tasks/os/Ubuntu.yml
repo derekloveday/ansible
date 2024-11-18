@@ -1,0 +1,71 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install fzf"
+  community.general.homebrew:
+    name: fzf
+    state: present
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Configure fzf config path (if it exists)"
+  block:
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Set path to fzf config path"
+      ansible.builtin.set_fact:
+        fzf_config_path: "{{ env.xdg_config_dir }}/fzf"
+      when: fzf_config_path is undefined
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether fzf config path exists"
+      ansible.builtin.stat:
+        path: "{{ fzf_config_path }}"
+      register: fzf_config_path_st
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Create {{ fzf_config_path }} directory"
+      ansible.builtin.file:
+        path: "{{ fzf_config_path }}"
+        owner: "{{ ansible_user_uid }}"
+        group: "{{ ansible_user_gid }}"
+        state: directory
+      when:
+        - not fzf_config_path_st.stat.exists
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install fzf key bindings and fuzzy completion"
+  ansible.builtin.shell: |
+    eval $({{ linuxbrew_prefix }}/bin/brew shellenv)
+    $(brew --prefix)/opt/fzf/install --xdg --key-bindings --completion --no-update-rc
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Configure .zshrc (if it exists)"
+  block:
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Set path to .zshrc"
+      ansible.builtin.set_fact:
+        zshrc_path: "{{ env.xdg_config_dir }}/zsh/.zshrc"
+      when: zshrc_path is undefined
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether .zshrc exists"
+      ansible.builtin.stat:
+        path: "{{ zshrc_path }}"
+      register: zshrc_path_st
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Resolve .zshrc symlink"
+      ansible.builtin.set_fact:
+        zshrc_path: "{{ zshrc_path_st.stat.lnk_source }}"
+      when:
+        - zshrc_path_st.stat.exists
+        - zshrc_path_st.stat.islnk
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether fzf is loaded in .zshrc"
+      ansible.builtin.command: >-
+        grep -Fq '[ -f "${XDG_CONFIG_HOME:-$HOME/.config}"/fzf/fzf.zsh ] && source "${XDG_CONFIG_HOME:-$HOME/.config}"/fzf/fzf.zsh' {{ zshrc_path }}
+      register: check_zshrc_fzf
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      when: zshrc_path_st.stat.exists
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} |  Load fzf in .zshrc"
+      ansible.builtin.blockinfile:
+        dest: "{{ zshrc_path }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: fzf"
+        append_newline: true
+        prepend_newline: true
+        block: |
+          [ -f "${XDG_CONFIG_HOME:-$HOME/.config}"/fzf/fzf.zsh ] && source "${XDG_CONFIG_HOME:-$HOME/.config}"/fzf/fzf.zsh
+      when:
+        - zshrc_path_st.stat.exists
+        - check_zshrc_fzf.rc != 0

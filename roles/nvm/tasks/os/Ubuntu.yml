@@ -1,0 +1,78 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Download Latest Version JSON"
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/nvm-sh/nvm/releases/latest
+  register: nvm_latest_version_json
+  changed_when: false
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Registering NVM Latest Release"
+  ansible.builtin.set_fact:
+    nvm_latest_release: "{{ nvm_latest_version_json.json.tag_name }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Registering NVM Latest Version"
+  ansible.builtin.set_fact:
+    nvm_latest_version: "{{ nvm_latest_release.stdout | default('') }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Show nvm_latest_release debug"
+  ansible.builtin.debug:
+    var: nvm_latest_release
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install nvm"
+  ansible.builtin.shell: |
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_latest_release }}/install.sh | /bin/bash
+  args:
+    creates: "{{ env.xdg_config_dir }}/nvm/nvm.sh"
+    executable: /bin/bash
+  register: curl_output
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Debug curl_output"
+  ansible.builtin.debug:
+    var: curl_output
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Configure .zshrc (if it exists)"
+  block:
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Set path to .zshrc"
+      ansible.builtin.set_fact:
+        zshrc_path: "{{ env.xdg_config_dir }}/zsh/.zshrc"
+      when: zshrc_path is undefined
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether .zshrc exists"
+      ansible.builtin.stat:
+        path: "{{ zshrc_path }}"
+      register: zshrc_path_st
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Resolve .zshrc symlink"
+      ansible.builtin.set_fact:
+        zshrc_path: "{{ zshrc_path_st.stat.lnk_source }}"
+      when:
+        - zshrc_path_st.stat.exists
+        - zshrc_path_st.stat.islnk
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Check whether nvm is loaded in .zshrc"
+      ansible.builtin.command: >-
+        grep -Fq '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' {{ zshrc_path }}
+      register: check_zshrc_nvm
+      ignore_errors: true
+      changed_when: false
+      failed_when: false
+      when: zshrc_path_st.stat.exists
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} |  Load nvm in .zshrc"
+      ansible.builtin.blockinfile:
+        dest: "{{ zshrc_path }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: nvm"
+        append_newline: true
+        prepend_newline: true
+        block: |
+          export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      when:
+        - zshrc_path_st.stat.exists
+        - check_zshrc_nvm.rc != 0
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Load nvm into current session"
+      ansible.builtin.shell: |
+        export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+      when:
+        - zshrc_path_st.stat.exists

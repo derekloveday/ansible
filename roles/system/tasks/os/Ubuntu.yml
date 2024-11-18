@@ -1,0 +1,65 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Update APT Repos and Upgrade APT Packages"
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: full
+    autoremove: true
+    autoclean: true
+  register: apt_output
+  become: true
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Update APT Repos and Upgrade APT Packages output"
+  ansible.builtin.debug: msg="{{ apt_output.stdout_lines }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Get install dependencies"
+  set_fact:
+    install_dependencies: "{{ Ubuntu_dependencies | join(' ') }}"
+  when: Ubuntu_dependencies is defined
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install"
+  ansible.builtin.command: "apt install -y {{ install_dependencies }}"
+  when: install_dependencies is defined
+  register: apt_output
+  become: true
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install output"
+  ansible.builtin.debug: msg="{{ apt_output.stdout_lines }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Detecting win32yank"
+  ansible.builtin.stat:
+    path: /usr/local/bin/win32yank.exe
+  register: win32yank_installed
+  when: ansible_host_environment_is_wsl
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install win32yank.exe"
+  when:
+    - ansible_host_environment_is_wsl
+    - not win32yank_installed.stat.exists
+  block:
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Download win32yank zip"
+      ansible.builtin.get_url:
+        url: https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip
+        dest: /tmp/win32yank.zip
+        mode: "0755"
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Unzip win32yank.exe"
+      ansible.builtin.unarchive:
+        src: /tmp/win32yank.zip
+        dest: /tmp
+        mode: "0755"
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Copy win32yank into path"
+      ansible.builtin.copy:
+        remote_src: true
+        src: /tmp/win32yank.exe
+        dest: /usr/local/bin/win32yank.exe
+        mode: "0755"
+      become: true
+
+    - name: "{{ role_name }} | {{ ansible_distribution }} | Remove tmp files"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/win32yank.zip
+        - /tmp/win32yank.exe

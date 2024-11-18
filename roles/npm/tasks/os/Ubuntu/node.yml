@@ -1,0 +1,58 @@
+---
+- name: "{{ role_name }} | {{ ansible_distribution }} | Check if Node LTS major version is installed"
+  ansible.builtin.shell: |
+    #!/usr/bin/env bash
+    TERM=dumb
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+    nvm ls {{ item }} | cut -d" " -f 2- | sed -e 's/^[[:space:]]*//' | cut -d" " -f 1
+  args:
+    executable: /bin/bash
+  register: node_lts_major_version_installed
+  failed_when: false
+  changed_when: false
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Get latest STABLE NodeJS version"
+  ansible.builtin.shell: |
+    version=$(echo {{ item }})
+    curl -sL https://nodejs.org/dist/index.json | jq -r '.[] | select(.lts) | .version' | grep $version | head -1
+  register: node_lts_major_version
+  failed_when: false
+  changed_when: false
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Show NodeJS versions"
+  ansible.builtin.debug:
+    msg:
+      - "{% if node_lts_major_version_installed.stdout != 'N/A' %}Installed NodeJS version: {{ node_lts_major_version_installed.stdout }}{% else %}No NodeJS version installed for version {{ item }}{% endif %}"
+      - "Online NodeJS LTS version: {{ node_lts_major_version.stdout }}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Register update needed"
+  ansible.builtin.set_fact:
+    nodejs_install_needed: "{% if (node_lts_major_version_installed.stdout != node_lts_major_version.stdout) %}True{% else %}False{% endif %}"
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Update for NodeJS required"
+  ansible.builtin.debug:
+    msg: "Update for NodeJS is required"
+  when:
+    - nodejs_install_needed is defined
+    - nodejs_install_needed
+
+- name: "{{ role_name }} | {{ ansible_distribution }} | Install NodeJS version {{ node_lts_major_version.stdout }}"
+  ansible.builtin.shell: |
+    #!/usr/bin/env bash
+
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+    nvm install {{ node_lts_major_version.stdout }}
+
+  args:
+    executable: /bin/bash
+  register: node_installation_output
+  failed_when: false
+  changed_when: false
+  when:
+    - nodejs_install_needed is defined
+    - nodejs_install_needed
